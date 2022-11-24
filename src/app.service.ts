@@ -20,7 +20,7 @@ export class AppService {
   paymentOrders : PaymentOrderModel[];
   provider : ethers.providers.BaseProvider;
 
-  constructor() {
+  constructor(private configService : ConfigService) {
     this.provider = ethers.getDefaultProvider("goerli");
     this.paymentOrders = [];
   }
@@ -54,8 +54,14 @@ export class AppService {
     this.paymentOrders.push(newPaymentOrder);
   }
 
-  claimPaymentOrder(id:number, secret:string, address:string) {
-    if(this.paymentOrders[id].secret != secret) throw new Error('wrong secret');
-
+  async claimPaymentOrder(id:number, secret:string, address:string) {
+    if(this.paymentOrders[id].secret != secret) throw new HttpException('wrong secret',403);
+    const seed = this.configService.get<string>('MNEMONIC');
+    const contractAddress = this.configService.get<string>('CONTRACT_ADDR');
+    const wallet = ethers.Wallet.fromMnemonic(seed);
+    const signer = wallet.connect(this.provider);
+    const signedContract = new ethers.Contract(contractAddress, tokenJson.abi, signer);
+    const tx = await signedContract.mint(address, ethers.utils.parseEther (this.paymentOrders[id].value.toString()));
+    return tx.wait();
   }
 }
